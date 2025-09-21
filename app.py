@@ -186,26 +186,38 @@ if st.button("🚀 Validate Conversion"):
             st.markdown("### 📝 Validation Report")
             st.write(validation_report)
 
-            # --- Step 3: Ask LLM to correct PySpark (only first chunk for safety) ---
-            correction_prompt = f"""
-            Based on the ETL input and PySpark output, rewrite the PySpark code so that it
-            fully and correctly implements the ETL logic.
+            # --- Step 3: Correct PySpark code (chunk by chunk) ---
+            corrected_chunks = []
+            for i, pyspark_chunk in enumerate(pyspark_chunks):
+                etl_chunk = etl_chunks[i] if i < len(etl_chunks) else ""
 
-            IMPORTANT:
-            - Return only the corrected PySpark code.
-            - If the original file is already correct, return the same code unchanged.
-            """
+                correction_prompt = f"""
+                Based on the ETL input and PySpark output below, rewrite the PySpark code
+                so that it fully and correctly implements the ETL logic.
 
-            correction_response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are an expert PySpark converter."},
-                    {"role": "user", "content": f"ETL Input (first chunk):\n{etl_chunks[0]}\n\nPySpark Output (first chunk):\n{pyspark_chunks[0]}\n\n{correction_prompt}"}
-                ],
-                temperature=0
-            )
+                IMPORTANT:
+                - Return only the corrected PySpark code for this chunk.
+                - If the original file is already correct, return the same code unchanged.
 
-            corrected_pyspark = correction_response.choices[0].message.content.strip()
+                ETL Input (chunk {i+1}):
+                {etl_chunk}
+
+                PySpark Output (chunk {i+1}):
+                {pyspark_chunk}
+                """
+
+                correction_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an expert PySpark converter."},
+                        {"role": "user", "content": correction_prompt}
+                    ],
+                    temperature=0
+                )
+
+                corrected_chunks.append(correction_response.choices[0].message.content.strip())
+
+            corrected_pyspark = "\n\n".join(corrected_chunks)
 
         except Exception as e:
             st.error(f"Error during validation: {e}")
